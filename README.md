@@ -1,7 +1,22 @@
 pi-changer
 ==========
-
 Expansion I/O board for RaspberryPI
+
+Components description
+==========
+* PIC24FJ64GB004 microcontroller  
+  * DIN13 round connector for car stereo connection/power  
+  * Connector for LCD with HD44780 controller  
+  * Rotary encoder  
+* Stereo audio amplifier  
+* 5.5mm power connector  
+* On/Off switch  
+* 800mA LDO or external SMPS module for 3 or 5A  
+* USB hub with 5 ports on PCB and 2 header connectors (same pinout as motherboards)  
+* rPi Expansion headers  
+  * 3x I2C header connector  
+  * SPI connector with two CS signals  
+  * RS232 connector  
 
 BOM
 ==========
