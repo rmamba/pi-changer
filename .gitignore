@@ -2,3 +2,5 @@
 *.o.d
 *.map
 *.elf
+*.mcw
+*.mcp
