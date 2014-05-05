@@ -37,7 +37,7 @@ COMMAND_READ_ID  = 0x09
 #******************************************************************************
 
 def SendHexFile(comHandle, hexFileHandle):
-	buffer = {}
+	buf = {}
 	ppMemory = {}
 	extAddr = 0
 
@@ -75,9 +75,10 @@ def SendHexFile(comHandle, hexFileHandle):
 				ppMemory[row]['data'][i] = int(data[4*i:4*(i+1)] ,16)
 		elif recordType == 1:
 			#???
+			doNothing =True
 		elif recordType == 4:
 			extAddr = int(line[9:13], 16) << 16
-		else
+		else:
 			print "Unknown hex record type"
 
 		line = hexFileHandle.readline()
@@ -98,61 +99,65 @@ def SendHexFile(comHandle, hexFileHandle):
 				ppMemory[row]['buffer'][1 + count * 2] = (ppMemory[row]['data'][count * 2])      & 0xFF;
 
 	print "Programming Device"
-	for row in range(0, len (ppMemory)) #PM_SIZE + EE_SIZE + CM_SIZE):
-		buffer = [ 0x00 ];
+	for row in range(0, len (ppMemory)): #PM_SIZE + EE_SIZE + CM_SIZE):
+		buf = [ 0x00 ];
 		m_Address = ppMemory[row]['address']
 		m_pBuffer = ppMemory[row]['buffer']
 
 #		if((m_bEmpty == TRUE) && (ppMemory[row]['type'] != 2))
 #			break
 
-		while(buffer[0] != COMMAND_ACK):
+		while(buf[0] != COMMAND_ACK):
 			if(ppMemory[row]['type'] == 0):
-				buffer = [ COMMAND_WRITE_PM, (m_Address) & 0xFF, (m_Address >> 8) & 0xFF, (m_Address >> 16) & 0xFF ]
-				WriteCommBlock(comHandle, buffer)
+				buf = [ COMMAND_WRITE_PM, (m_Address) & 0xFF, (m_Address >> 8) & 0xFF, (m_Address >> 16) & 0xFF ]
+				WriteCommBlock(comHandle, buf)
 				WriteCommBlock(comHandle, m_pBuffer);
 			elif(ppMemory[row]['type'] == 1):
-				buffer = [ COMMAND_WRITE_EE, (m_Address) & 0xFF, (m_Address >> 8) & 0xFF, (m_Address >> 16) & 0xFF ]
-				WriteCommBlock(comHandle, buffer)
+				buf = [ COMMAND_WRITE_EE, (m_Address) & 0xFF, (m_Address >> 8) & 0xFF, (m_Address >> 16) & 0xFF ]
+				WriteCommBlock(comHandle, buf)
 				WriteCommBlock(comHandle, m_pBuffer);
-			elif((ppMemory[row]['type'] == 2) && (m_RowNumber == 0)):
-				buffer = [ COMMAND_WRITE_CM, (char)(m_bEmpty)& 0xFF, m_pBuffer[0], m_pBuffer[1] ]
-				WriteCommBlock(comHandle, buffer)
-			elif((ppMemory[row]['type'] == 2) && (m_RowNumber != 0)):
-				if((m_eFamily == dsPIC30F) && (m_RowNumber == 7))
+			elif((ppMemory[row]['type'] == 2) and (m_RowNumber == 0)):
+				buf = [ COMMAND_WRITE_CM, (char)(m_bEmpty)& 0xFF, m_pBuffer[0], m_pBuffer[1] ]
+				WriteCommBlock(comHandle, buf)
+			elif((ppMemory[row]['type'] == 2) and (m_RowNumber != 0)):
+				if((m_eFamily == dsPIC30F) and (m_RowNumber == 7)):
 					break
-				buffer = [ (char)(m_bEmpty)& 0xFF, m_pBuffer[0], m_pBuffer[1] ]
-				WriteCommBlock(comHandle, buffer)
+				buf = [ (char)(m_bEmpty)& 0xFF, m_pBuffer[0], m_pBuffer[1] ]
+				WriteCommBlock(comHandle, buf)
 			else:
-				assert(!"Unknown memory type");
+				print "Unknown memory type"
 				quit()
 
-			buffer = ReceiveData(comHandle, 1);
+			buf = ReceiveData(comHandle, 1);
 	
 	#Reset target device
-	buffer = [ COMMAND_RESET ] 
-	WriteCommBlock(comHandle, buffer)
+	buf = [ COMMAND_RESET ] 
+	WriteCommBlock(comHandle, buf)
 
 	time.sleep(.1)
 	print "Done."
 
 #******************************************************************************
 
-def readID(comHandle):
+def ReadID(comHandle):
 	deviceId = 0;
 	processId = 0;
 
-	buffer = [ COMMAND_READ_ID ];
+	buf = [ COMMAND_READ_ID ];
 
 	print "Reading Target Device ID"
-	WriteCommBlock(comHandle, Buffer)
-	buffer = ReceiveData(comHandle, 8)
+	WriteCommBlock(comHandle, buf)
+	buf = ReceiveData(comHandle, 8)
 
-	deviceId  = ((buffer[1] << 8) & 0xFF00) | (buffer[0] & 0x00FF))
-	processId = (buffer[5] >> 4) & 0x0F
+	if len(buf) != 8:
+		print "\r\nNo response..."
+		return False
+
+	deviceId  = (((buf[1] << 8) & 0xFF00) | (buf[0] & 0x00FF))
+	processId = (buf[5] >> 4) & 0x0F
 
 	#{"PIC24FJ64GA006",    0x405, 3, PIC24F},
-	if (deviceId != 0x420F) || (processId != 3):
+	if (deviceId != 0x420F) or (processId != 3):
 		print ".. PIC24FJ64GB004 not found! (ID: 0x%04x, processId: 0x%02x" % (deviceId, processId)
 		return False
     
@@ -165,29 +170,29 @@ def ReadPM(comHandle, readPMAddress):
 	rowSize = PM33F_ROW_SIZE
 	readAddress = readPMAddress - readPMAddress % (rowSize * 2);
 		
-	buffer = [ COMMAND_READ_PM, readAddress & 0xFF, (readAddress >> 8) & 0xFF, (readAddress >> 16) & 0xFF ]
+	buf = [ COMMAND_READ_PM, readAddress & 0xFF, (readAddress >> 8) & 0xFF, (readAddress >> 16) & 0xFF ]
 
-	WriteCommBlock(comHandle, buffer)
-	ReceiveData(comHandle, buffer, rowSize * 3)
+	WriteCommBlock(comHandle, buf)
+	ReceiveData(comHandle, buf, rowSize * 3)
 
-	for count in range(0, rowSize * 3):
+	for count in range(0, rowSize * 3, 12):
 		print "0x%06x:" % hex(readAddress),
 
-		print " %02x" % (buffer[count++] & 0xFF),
-		print " %02x" % (buffer[count++] & 0xFF),
-		print " %02x" % (buffer[count++] & 0xFF),
+		print " %02x" % (buf[count+0] & 0xFF),
+		print " %02x" % (buf[count+1] & 0xFF),
+		print " %02x" % (buf[count+2] & 0xFF),
 
-		print " %02x" % (buffer[count++] & 0xFF),
-		print " %02x" % (buffer[count++] & 0xFF),
-		print " %02x" % (buffer[count++] & 0xFF),
+		print " %02x" % (buf[count+3] & 0xFF),
+		print " %02x" % (buf[count+4] & 0xFF),
+		print " %02x" % (buf[count+5] & 0xFF),
 
-		print " %02x" % (buffer[count++] & 0xFF),
-		print " %02x" % (buffer[count++] & 0xFF),
-		print " %02x" % (buffer[count++] & 0xFF),
+		print " %02x" % (buf[count+6] & 0xFF),
+		print " %02x" % (buf[count+7] & 0xFF),
+		print " %02x" % (buf[count+8] & 0xFF),
 
-		print " %02x" % (buffer[count++] & 0xFF),
-		print " %02x" % (buffer[count++] & 0xFF),
-		print " %02x" % (buffer[count++] & 0xFF)
+		print " %02x" % (buf[count+9] & 0xFF),
+		print " %02x" % (buf[count+10] & 0xFF),
+		print " %02x" % (buf[count+11] & 0xFF)
 
 		readAddress = readAddress + 8;
 
@@ -196,44 +201,44 @@ def ReadPM(comHandle, readPMAddress):
 def ReadEE(comHandle, readEEAddress):
 	readAddress = readEEAddress - readEEAddress % (EE30F_ROW_SIZE * 2);
 	
-	buffer = [ COMMAND_READ_EE, readAddress & 0xFF, (readAddress >> 8) & 0xFF, (readAddress >> 16) & 0xFF ]
+	buf = [ COMMAND_READ_EE, readAddress & 0xFF, (readAddress >> 8) & 0xFF, (readAddress >> 16) & 0xFF ]
 
-	WriteCommBlock(comHandle, buffer)
+	WriteCommBlock(comHandle, buf)
 
-	ReceiveData(comHandle, buffer, EE30F_ROW_SIZE * 2)
+	ReceiveData(comHandle, buf, EE30F_ROW_SIZE * 2)
 
-	for count in (0, EE30F_ROW_SIZE * 2):
-		print "0x%06x:", ReadAddress),
+	for count in (0, EE30F_ROW_SIZE * 2, 16):
+		print "0x%06x: " % readAddress,
 
-		print " %02x" % (Buffer[Count++] & 0xFF),
-		print " %02x " % (Buffer[Count++] & 0xFF),
+		print " %02x " % (buf[count+0] & 0xFF),
+		print " %02x " % (buf[count+1] & 0xFF),
 
-		print " %02x" % (Buffer[Count++] & 0xFF),
-		print " %02x " % (Buffer[Count++] & 0xFF),
+		print " %02x " % (buf[count+2] & 0xFF),
+		print " %02x " % (buf[count+3] & 0xFF),
 
-		print " %02x" % (Buffer[Count++] & 0xFF),
-		print " %02x " % (Buffer[Count++] & 0xFF),
+		print " %02x " % (buf[count+4] & 0xFF),
+		print " %02x " % (buf[count+5] & 0xFF),
 
-		print " %02x" % (Buffer[Count++] & 0xFF),
-		print " %02x " % (Buffer[Count++] & 0xFF),
+		print " %02x " % (buf[count+6] & 0xFF),
+		print " %02x " % (buf[count+7] & 0xFF),
 
-		print " %02x" % (Buffer[Count++] & 0xFF),
-		print " %02x " % (Buffer[Count++] & 0xFF),
+		print " %02x " % (buf[count+8] & 0xFF),
+		print " %02x " % (buf[count+9] & 0xFF),
 
-		print " %02x" % (Buffer[Count++] & 0xFF),
-		print " %02x " % (Buffer[Count++] & 0xFF),
+		print " %02x " % (buf[count+10] & 0xFF),
+		print " %02x " % (buf[count+11] & 0xFF),
 
-		print " %02x" % (Buffer[Count++] & 0xFF),
-		print " %02x " % (Buffer[Count++] & 0xFF),
+		print " %02x " % (buf[count+12] & 0xFF),
+		print " %02x " % (buf[count+13] & 0xFF),
 
-		print " %02x" % (Buffer[Count++] & 0xFF),
-		print " %02x",Buffer[Count++] & 0xFF)
+		print " %02x " % (buf[count+14] & 0xFF),
+		print " %02x " % (buf[count+15] & 0xFF)
 
 		readAddress = readAddress + 16;
 
 #******************************************************************************
 
-def PrintUsage:
+def PrintUsage():
 	print "\nUsage: \"pyLoader.py\" [-pe] hexfile\n\n"
 	print "Options:\n\n"
 	print "  -rp\n"
@@ -244,14 +249,20 @@ def PrintUsage:
 #******************************************************************************
 
 def ReceiveData(comHandle, bytesToReceive):
-	buffer = comHandle.read(bytesToReceive)
-	return buffer
+	buf = comHandle.read(bytesToReceive)
+	return buf
 
 #******************************************************************************
 
-def WriteCommBlock(comHandle, buffer):
-	print "."
-	if comHandle.write(buffer) < len(buffer):
+def PrintChars(text):
+	sys.stdout.write(text)
+	sys.stdout.flush()
+
+#******************************************************************************
+
+def WriteCommBlock(comHandle, buf):
+	PrintChars('.')
+	if comHandle.write(bytearray(buf)) < len(buf):
 		return False
 	return True
 
@@ -261,21 +272,21 @@ def ReadCommBlock(comHandle, maxLength):
 	#/* only try to read number of bytes in queue */
 	#ClearCommError(*pComDev, &ErrorFlags, &ComStat);
 
-	buffer = None
+	buf = None
 	length = min(maxLength, comHandle.inWaiting());
    
 	if length > 0:
-		buffer = comHandle.read(length)
+		buf = comHandle.read(length)
 	else:
 		#wait one second
 		time.sleep(1);
 
-	return buffer;
+	return buf;
 
 #******************************************************************************
 
 def OpenConnection(portName, baudRate):
-	return serial.Serial(port=self.device, baudrate=self.baud, timeout=self.timeout
+	return serial.Serial(port=portName, baudrate=baudRate, timeout=1)
 
 #******************************************************************************
 
@@ -286,7 +297,7 @@ def CloseConnection(comHandle):
 #******************************************************************************
 
 if  __name__ =='__main__':
-	comInterface = '/dev/ttyS0'
+	comInterface = '/dev/ttyAMA0'
 	baudRate = 115200
 
 	comPort = None
