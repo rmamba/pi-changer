@@ -6,6 +6,8 @@ import time
 #RaspberryPi: sudo apt-get install python-serial
 import serial
 
+import RPi.GPIO as GPIO
+
 PM_SIZE = 1536 #/* Max: 144KB/3/32=1536 PM rows for 30F. */
 EE_SIZE = 128 #/* 4KB/2/16=128 EE rows */
 CM_SIZE = 8
@@ -150,7 +152,6 @@ def ReadID(comHandle):
 	buf = ReceiveData(comHandle, 8)
 
 	if len(buf) != 8:
-		print "\r\nNo response..."
 		return False
 
 	deviceId  = (((buf[1] << 8) & 0xFF00) | (buf[0] & 0x00FF))
@@ -167,16 +168,20 @@ def ReadID(comHandle):
 #******************************************************************************
 
 def ReadPM(comHandle, readPMAddress):
-	rowSize = PM33F_ROW_SIZE
+	rowSize = PM30F_ROW_SIZE
 	readAddress = readPMAddress - readPMAddress % (rowSize * 2);
-		
+	
 	buf = [ COMMAND_READ_PM, readAddress & 0xFF, (readAddress >> 8) & 0xFF, (readAddress >> 16) & 0xFF ]
 
 	WriteCommBlock(comHandle, buf)
-	ReceiveData(comHandle, buf, rowSize * 3)
+	buf = ReceiveData(comHandle, rowSize * 3)
+
+	if len(buf) < rowSize * 3:
+		print "Error receiving data..."
+		quit()
 
 	for count in range(0, rowSize * 3, 12):
-		print "0x%06x:" % hex(readAddress),
+		print "0x%06x:" % readAddress,
 
 		print " %02x" % (buf[count+0] & 0xFF),
 		print " %02x" % (buf[count+1] & 0xFF),
@@ -241,9 +246,9 @@ def ReadEE(comHandle, readEEAddress):
 def PrintUsage():
 	print "\nUsage: \"pyLoader.py\" [-pe] hexfile\n\n"
 	print "Options:\n\n"
-	print "  -rp\n"
+	print "  -p\n"
 	print "       read program flash. Must provide address to read in HEX format: -p 0x000100"
-	print "  -re\n"
+	print "  -e\n"
 	print "       read EEPROM. Must provide address to read in HEX format: -e 0x7FFC00"
 
 #******************************************************************************
@@ -313,27 +318,37 @@ if  __name__ =='__main__':
 		print "Opening port " + comInterface + " failed..."
 		quit()
 
+	#Reset microcontroller
+	GPIO.setup(7, GPIO.OUT)
+	GPIO.output(7, True)
+	time.sleep(1)
+	GPIO.output(7, False)
+
 	#Parse parameters
-	for i in range(1, len(sys.argv)):
-		if sys.argv[i] == "-rp":
+	i = 1
+	while i < len(sys.argv):
+		if sys.argv[i] == "-p":
 			i=i+1
 			readPMAddress = int(sys.argv[i], 16)
-		elif sys.argv[i] == "-re":
+		elif sys.argv[i] == "-e":
 			i=i+1
 			readEEAddress = int(sys.argv[i], 16)
 		else:
-			hexFile = file.open(sys.argv[i], 'r')
+			hexFile = open(sys.argv[i], 'r')
 			if hexFile == None:
 				print "Error opening file " + sys.argv[i]
 				quit()
+		i=i+1
 
 	#Read device ID
-	deviceFamily = ReadID(comPort);
+	if not ReadID(comPort):
+		print "Error reading deviceID..."
+		quit()
 
 	if readPMAddress != None:
-		ReadPM(comPort, pReadPMAddress, Family)
+		ReadPM(comPort, readPMAddress)
 	elif readEEAddress != None:
-		ReadEE(comPort, pReadEEAddress, Family)
+		ReadEE(comPort, readEEAddress)
 	elif hexFile == None:
 		print "Please provide HEX file name to read"
 		PrintUsage();
