@@ -30,9 +30,9 @@ extern "C" {
 #define PM_ROW_WRITE 		0x4001
 #define CONFIG_WORD_WRITE	0X4000
 
-#define FCY                     40000000
-#define BAUDRATE                115200
-#define BRGVAL                  ((FCY/BAUDRATE)/16)-1
+#define FCY			8000000				//???
+#define BAUDRATE		9600
+#define BRGVAL			((FCY/BAUDRATE)/16)-1
 
 typedef short          Word16;
 typedef unsigned short UWord16;

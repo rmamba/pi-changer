@@ -14,7 +14,7 @@
 
 /** CONFIGURATION **************************************************/
 _CONFIG1(FWDTEN_OFF & ICS_PGx1 & GWRP_OFF & JTAGEN_OFF & GCP_OFF);
-_CONFIG2(FNOSC_FRCPLL & IESO_OFF & PLL96MHZ_OFF & PLLDIV_DIV2 & OSCIOFNC_OFF & FCKSM_CSDCMD);
+_CONFIG2(FNOSC_FRC & IESO_OFF & PLL96MHZ_OFF & PLLDIV_DIV2 & OSCIOFNC_OFF & FCKSM_CSDCMD);
 _CONFIG3(SOSCSEL_IO & WPDIS_WPDIS & WPCFG_WPCFGDIS);
 _CONFIG4(DSWDTEN_OFF & DSBOREN_OFF);
 
@@ -27,15 +27,21 @@ int main(void)
     uReg32 Delay;
 
     OSCTUN = 0;
-    CLKDIVbits.RCDIV=0;                                                         // 8Mhz internal RC no divide
+    CLKDIVbits.RCDIV=0;                                                         // 8Mhz internal RC, divide by 2 for USB PLL
     CLKDIVbits.CPDIV=0;                                                         // USB System Clock Select bits - set to 32MHz
     CLKDIVbits.DOZEN=0;                                                         // Disable peripheral clock divider
     CLKDIVbits.DOZE=0;                                                          // 1:1
     RCONbits.SWDTEN=0;                                                          /* Disable Watch Dog Timer*/
-    while(OSCCONbits.LOCK!=1) {};                                               /* Wait for PLL to lock*/
+    //while(OSCCONbits.LOCK!=1) {};                                               /* Wait for PLL to lock*/
 
-    SourceAddr.Val32 = 0xc00;
-    Delay.Val32 = ReadLatch(SourceAddr.Word.HW, SourceAddr.Word.LW);
+    TRISAbits.TRISA7 = 0; PORTAbits.RA7 = 1;
+    TRISAbits.TRISA8 = 0; PORTAbits.RA8 = 0;
+    TRISAbits.TRISA9 = 0; PORTAbits.RA9 = 0;
+    TRISAbits.TRISA10 = 0; PORTAbits.RA10 = 0;
+
+    SourceAddr.Val32 = 0xC00;
+    //Delay.Val32 = ReadLatch(SourceAddr.Word.HW, SourceAddr.Word.LW);
+    Delay.Val32 = 0x10;
     if(Delay.Val[0] == 0)
     {
         ResetDevice();
@@ -56,6 +62,8 @@ int main(void)
     }
 
     U2BRG = BRGVAL ;                                                            /*  BAUD Rate Setting of Uart2  */
+    RPINR19bits.U2RXR = 25;                                                     //U2Rx to RP25; pin 5
+    RPOR12bits.RP24R = 5;                                                       //RP24 pin 4 to U2TX
     U2MODE = 0x8000;                                                            /* Reset UART to 8-n-1, alt pins, and enable */
     U2STA  = 0x0400;                                                            /* Reset status register and enable TX */
 
@@ -113,10 +121,10 @@ int main(void)
                 int    Size;
                 for(Size = 0; Size < CM_ROW_SIZE*3;)
                 {
-                        GetChar(&(Buffer[Size++]));
-                        GetChar(&(Buffer[Size++]));
-                        GetChar(&(Buffer[Size++]));
-                        PutChar(COMMAND_ACK);				/*Send Acknowledgement */
+                    GetChar(&(Buffer[Size++]));
+                    GetChar(&(Buffer[Size++]));
+                    GetChar(&(Buffer[Size++]));
+                    PutChar(COMMAND_ACK);				/*Send Acknowledgement */
                 }
                 break;
             }
@@ -132,28 +140,35 @@ int main(void)
                     {
                         Temp.Val[0]=Buffer[Size+1];
                         Temp.Val[1]=Buffer[Size+2];
-                        WriteLatch( SourceAddr.Word.HW,
-                            SourceAddr.Word.LW,
-                            Temp.Word.HW,
-                            Temp.Word.LW);
+                        WriteLatch( SourceAddr.Word.HW, SourceAddr.Word.LW, Temp.Word.HW, Temp.Word.LW );
                         WriteMem(CONFIG_WORD_WRITE);
                     }
                 }
 
+                PORTAbits.RA7=0;
+                PORTAbits.RA8=0;
+                PORTAbits.RA9=0;
+                PORTAbits.RA10=0;
                 ResetDevice();
                 break;
             }
 
             case COMMAND_NACK:
             {
+                PORTAbits.RA7=0;
+                PORTAbits.RA8=0;
+                PORTAbits.RA9=0;
+                PORTAbits.RA10=0;
                 ResetDevice();
                 break;
             }
 
 
             default:
+            {
                 PutChar(COMMAND_NACK);
                 break;
+            }
         }
     }
 }
@@ -163,21 +178,29 @@ void GetChar(char * ptrChar)
 {
     while(1)
     {
+        PORTAbits.RA10 = 0;
+        PORTAbits.RA9 = 0;
+        PORTAbits.RA8 = 0;
+
         /* if timer expired, signal to application to jump to user code */
         if(IFS0bits.T3IF == 1)
         {
             * ptrChar = COMMAND_NACK;
             break;
         }
+
         /* check for receive errors */
         if(U2STAbits.FERR == 1)
         {
+            PORTAbits.RA10 = 1;
+            U2STAbits.FERR = 0;
             continue;
-        }
+        } /**/
 
         /* must clear the overrun error to keep uart receiving */
         if(U2STAbits.OERR == 1)
         {
+            PORTAbits.RA9 = 1;
             U2STAbits.OERR = 0;
             continue;
         }
@@ -185,6 +208,7 @@ void GetChar(char * ptrChar)
         /* get the data */
         if(U2STAbits.URXDA == 1)
         {
+            PORTAbits.RA8=1;
             T2CONbits.TON=0; /* Disable timer countdown */
             * ptrChar = U2RXREG;
             break;
