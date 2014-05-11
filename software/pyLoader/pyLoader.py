@@ -46,21 +46,18 @@ def SendHexFile(comHandle, hexFileHandle):
 	ppMemory = {}
 	extAddr = 0
 
-	for row in range(0, PM_SIZE):
-		ppMemory[row] = {'type': 0, 'address': 0x000000, 'buffer': {}, 'data': None, 'byteCount':0}
+#	for row in range(0, PM_SIZE):
+#		ppMemory[row] = {'type': 0, 'address': 0x000000, 'buffer': {}, 'data': None, 'byteCount':0}
 
-	for row in range(0, EE_SIZE):
-		ppMemory[row + PM_SIZE] = {'type': 1, 'address': 0x7FF000, 'buffer': {}, 'data': None, 'byteCount':0}
+#	for row in range(0, EE_SIZE):
+#		ppMemory[row + PM_SIZE] = {'type': 1, 'address': 0x7FF000, 'buffer': {}, 'data': None, 'byteCount':0}
 
-	for row in range(0, CM_SIZE):
-		ppMemory[row + PM_SIZE + EE_SIZE] = {'type': 2, 'address': 0xF80000, 'buffer': {}, 'data': None, 'byteCount':0}
+#	for row in range(0, CM_SIZE):
+#		ppMemory[row + PM_SIZE + EE_SIZE] = {'type': 2, 'address': 0xF80000, 'buffer': {}, 'data': None, 'byteCount':0}
 
 	print "Reading HexFile"
-
-	line = hexFileHandle.readline()
-
 	row = 0
-	while line:
+	for line in hexFileHandle:
 		if line[0] != ':':
 			print "Error in file, quiting..."
 			quit()
@@ -71,29 +68,31 @@ def SendHexFile(comHandle, hexFileHandle):
 
 		if recordType == 0:
 			address = (address + extAddr) / 2
+			ppMemory[row] = {'type': 0, 'address': 0x000000, 'buffer': {}, 'data': None, 'byteCount':0} 
 			ppMemory[row]['address'] = address
 			ppMemory[row]['byteCount'] = byteCount
+
+			ppMemory[row]['line'] = line
 
 			data = line[9:-2]
 			ppMemory[row]['data'] = {}
 			for i in range(0, byteCount / 2):
 				ppMemory[row]['data'][i] = int(data[4*i:4*(i+1)] ,16)
+			row = row + 1
 		elif recordType == 1:
-			#???
-			doNothing =True
+			doNothing = True
 		elif recordType == 4:
 			extAddr = int(line[9:13], 16) << 16
 		else:
 			print "Unknown hex record type"
-
-		line = hexFileHandle.readline()
+			quit()
 
 	for row in range(0, len(ppMemory)):
 		if ppMemory[row]['type'] == 0:
 			for count in range(0, len(ppMemory[row]['data']), 2):
-				ppMemory[row]['buffer'][0 + count * 3] = (ppMemory[row]['data'][count * 2]     >> 8) & 0xFF
-				ppMemory[row]['buffer'][1 + count * 3] = (ppMemory[row]['data'][count * 2])          & 0xFF
-				ppMemory[row]['buffer'][2 + count * 3] = (ppMemory[row]['data'][count * 2 + 1] >> 8) & 0xFF
+				ppMemory[row]['buffer'][0 + count * 3] = (ppMemory[row]['data'][count]     >> 8) & 0xFF
+				ppMemory[row]['buffer'][1 + count * 3] = (ppMemory[row]['data'][count])          & 0xFF
+				ppMemory[row]['buffer'][2 + count * 3] = (ppMemory[row]['data'][count + 1] >> 8) & 0xFF
 		elif ppMemory[row]['type'] == 2:
 			ppMemory[row]['buffer'][0] = (ppMemory[row]['data'][0]  >> 8) & 0xFF;
 			ppMemory[row]['buffer'][1] = (ppMemory[row]['data'][0])       & 0xFF;
@@ -134,12 +133,12 @@ def SendHexFile(comHandle, hexFileHandle):
 				quit()
 
 			buf = ReceiveData(comHandle, 1);
-	
+			print "Buff: ", buf
 	#Reset target device
 	buf = [ COMMAND_RESET ] 
 	WriteCommBlock(comHandle, buf)
 
-	time.sleep(.1)
+	time.sleep(.25)
 	print "Done."
 
 #******************************************************************************
@@ -161,10 +160,10 @@ def ReadID(comHandle):
 	processId = (buf[5] >> 4) & 0x0F
 
 	if (deviceId != 0x420F) or (processId != 0):
-		print ".. PIC24FJ64GB004 not found! (ID: 0x%04x, processId: 0x%02x" % (deviceId, processId)
+		print ".. PIC24FJ64GB004 not found! (ID: 0x%04x, processId: 0x%02x)" % (deviceId, processId)
 		return False
-    
-	print "..   Found PIC24FJ64GB004 (ID: 0x%04x, processId: 0x%02x" % (deviceId, processId)
+
+	print "..   Found PIC24FJ64GB004 (ID: 0x%04x, processId: 0x%02x)" % (deviceId, processId)
 	return True
 
 #******************************************************************************
@@ -172,7 +171,7 @@ def ReadID(comHandle):
 def ReadPM(comHandle, readPMAddress):
 	rowSize = PM30F_ROW_SIZE
 	readAddress = readPMAddress - readPMAddress % (rowSize * 2);
-	
+
 	buf = [ COMMAND_READ_PM, readAddress & 0xFF, (readAddress >> 8) & 0xFF, (readAddress >> 16) & 0xFF ]
 
 	WriteCommBlock(comHandle, buf)
@@ -293,7 +292,7 @@ def ReadCommBlock(comHandle, maxLength):
 #******************************************************************************
 
 def OpenConnection(portName, baudRate):
-	return serial.Serial(port=portName, baudrate=baudRate, timeout=1)
+	return serial.Serial(port=portName, baudrate=baudRate, timeout=3)
 
 #******************************************************************************
 
@@ -348,6 +347,7 @@ if  __name__ =='__main__':
 		quit()
 
 	if readPMAddress != None:
+		print "ReadPM"
 		ReadPM(comPort, readPMAddress)
 	elif readEEAddress != None:
 		ReadEE(comPort, readEEAddress)
