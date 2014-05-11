@@ -62,13 +62,14 @@ int main(void)
     }
 
     U2BRG = BRGVAL ;                                                            /*  BAUD Rate Setting of Uart2  */
-    RPINR19bits.U2RXR = 25;                                                     //U2Rx to RP25; pin 5
+    RPINR19bits.U2RXR = 25;                                                     //U2RX to RP25; pin 5
     RPOR12bits.RP24R = 5;                                                       //RP24 pin 4 to U2TX
     U2MODE = 0x8000;                                                            /* Reset UART to 8-n-1, alt pins, and enable */
     U2STA  = 0x0400;                                                            /* Reset status register and enable TX */
 
     while(1)
     {
+        //PutChar(COMMAND_ACK);
         char Command;
         GetChar(&Command);
         switch(Command)

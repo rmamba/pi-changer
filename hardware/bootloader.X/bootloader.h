@@ -30,7 +30,7 @@ extern "C" {
 #define PM_ROW_WRITE 		0x4001
 #define CONFIG_WORD_WRITE	0X4000
 
-#define FCY			8000000				//???
+#define FCY			4000000				//Fosc/2
 #define BAUDRATE		9600
 #define BRGVAL			((FCY/BAUDRATE)/16)-1
 
