@@ -36,6 +36,9 @@ COMMAND_WRITE_CM = 0x07
 COMMAND_RESET    = 0x08
 COMMAND_READ_ID  = 0x09
 
+GPIO.setmode(GPIO.BOARD)
+GPIO.setwarnings(False)
+
 #******************************************************************************
 
 def SendHexFile(comHandle, hexFileHandle):
@@ -157,12 +160,11 @@ def ReadID(comHandle):
 	deviceId  = (((buf[1] << 8) & 0xFF00) | (buf[0] & 0x00FF))
 	processId = (buf[5] >> 4) & 0x0F
 
-	#{"PIC24FJ64GA006",    0x405, 3, PIC24F},
-	if (deviceId != 0x420F) or (processId != 3):
+	if (deviceId != 0x420F) or (processId != 0):
 		print ".. PIC24FJ64GB004 not found! (ID: 0x%04x, processId: 0x%02x" % (deviceId, processId)
 		return False
     
-	print "..   Found PIC24FJ64GB004 (ID: 0x405)"
+	print "..   Found PIC24FJ64GB004 (ID: 0x%04x, processId: 0x%02x" % (deviceId, processId)
 	return True
 
 #******************************************************************************
@@ -255,7 +257,7 @@ def PrintUsage():
 
 def ReceiveData(comHandle, bytesToReceive):
 	buf = comHandle.read(bytesToReceive)
-	return buf
+	return bytearray(buf)
 
 #******************************************************************************
 
@@ -303,7 +305,7 @@ def CloseConnection(comHandle):
 
 if  __name__ =='__main__':
 	comInterface = '/dev/ttyAMA0'
-	baudRate = 115200
+	baudRate = 9600
 
 	comPort = None
 	readPMAddress = None
